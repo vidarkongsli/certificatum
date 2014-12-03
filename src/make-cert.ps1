@@ -1,3 +1,4 @@
+#requires -version 3
 param (
     [ValidateSet('RootCA')]
     [Parameter(Mandatory=$true)]
@@ -8,7 +9,10 @@ param (
 
     [Parameter(Mandatory=$true)]
     #[ValidateScript({-not($_ -match '-|,|.|;')})]
-    $subject
+    $subject,
+    [Parameter(Mandatory=$false)]
+    [ValidateScript({[System.Xml.XmlConvert]::ToTimeSpan($_)})]
+    $validityPeriod = (New-TimeSpan -Days 365)
     )
 $ErrorActionPreference = 'Stop'
 get-command makecert -ErrorAction SilentlyContinue 2>&1 | out-null
@@ -33,7 +37,12 @@ if (test-path $cerFile -PathType Leaf) {
 
 $tempFileName = [System.IO.Path]::GetRandomFileName()
 
-$params = "makecert -r -n ""$subject"" -pe -sv ""$tempFileName"" -a sha1 -len 2048 -b 09/25/2014 -e 09/25/2024 -cy authority ""$cerFile"""
+function format ($d) { $d.ToString("MM") + '/' + $d.ToString("dd") + '/' + $d.ToString("yyyy")}
+
+$validityStart = get-date
+$validityEnd = $validityStart.Add($validityPeriod)
+
+$params = "makecert -r -n ""$subject"" -pe -sv ""$tempFileName"" -a sha1 -len 2048 -b $(format $validityStart) -e $(format $validityEnd) -cy authority ""$cerFile"""
 $params2 = "pvk2pfx -pvk ""$tempFileName"" -spc ""$cerFile"" -pfx ""$pfxFile"""
 if ($type -eq 'RootCA') {
     & cmd /c $params
